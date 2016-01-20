@@ -1,12 +1,25 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
+#include <WiFiClient.h>
 #include <ArduinoOTA.h>
+#include <ThingSpeak.h>
+#include <DHT.h>
+
 
 #include "settings.h"
 
 const char* ssid = SETTINGS_SSID;
 const char* password = SETTINGS_PASS;
+
+float f;
+float h;
+
+#define DHTPIN 2
+#define DHTTYPE DHT11
+
+WiFiClient client;
+DHT dht(DHTPIN, DHTTYPE);
 
 void setup() {
   Serial.begin(115200);
@@ -49,8 +62,61 @@ void setup() {
   Serial.println("Ready OTA");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
+  
+  setupDht();
+  delay(2000);
+  ThingSpeak.begin(client);
+  delay(100);
 }
 
+int counter;
+
 void loop() {
+  counter++;
+  if (counter > 200) {
+    readTemp();
+    postValues();
+    counter = 0;
+  }
   ArduinoOTA.handle();
+  delay(100);
 }
+
+void postValues(void) {
+  if (!isnan(f)) {
+    Serial.println("posting: f: " + convertFloatToString(f) + " h: " + convertFloatToString(h));
+    ThingSpeak.setField(1,f);
+    ThingSpeak.setField(3,h);
+    ThingSpeak.writeFields(SETTINGS_THINGSPEAK_CHANNEL, SETTINGS_THINGSPEAK_KEY);
+    // ThingSpeak.writeField(SETTINGS_THINGSPEAK_CHANNEL, 1, f, SETTINGS_THINGSPEAK_KEY);
+    // delay(500);
+    // ThingSpeak.writeField(SETTINGS_THINGSPEAK_CHANNEL, 3, h, SETTINGS_THINGSPEAK_KEY);
+  } 
+  else {
+    Serial.println("dht read error");    
+  }
+  delay(500);
+}
+
+void readTemp(void) {
+  f = dht.readTemperature(true);
+  delay(2000);
+  h = dht.readHumidity();
+  delay(2000);
+}
+
+void setupDht(void) {
+  dht.begin();
+  delay(100);
+}
+
+String convertFloatToString(float n) {
+  char buf2[16];
+  return dtostrf(n, 5, 2, buf2);
+}
+
+
+
+
+
+
